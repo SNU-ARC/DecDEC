@@ -1,0 +1,15 @@
+numpy~=2.2.0
+torch~=2.7.1
+transformers~=4.53.0
+tqdm~=4.67.1
+numba~=0.61.2
+datasets~=3.6.0
+accelerate~=1.8.1
+setuptools~=80.9.0
+pandas~=2.3.0
+safetensors~=0.5.3
+threadpoolctl~=3.6.0
+pyyaml~=6.0.2
+attributedict~=0.3.0
+flash1dkmeans>=0.2.3
+lm-eval==0.4.9

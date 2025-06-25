@@ -1,0 +1,3 @@
+[submodule "decdec_setup/any-precision-llm"]
+	path = decdec_setup/any-precision-llm
+	url = https://github.com/SNU-ARC/any-precision-llm
