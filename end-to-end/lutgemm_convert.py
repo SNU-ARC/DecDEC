@@ -125,27 +125,44 @@ ckpt = torch.load(os.path.join(ckpt_dir, "cheatsheet.pt"))
 
 new_dict = {}
 for i, layer in enumerate(ckpt):
-    new_dict['layers.'+str(i)+'.attention.wqkv.q_residual'] = layer["self_attn.qkv_proj"]["cheatsheet"]
-    new_dict['layers.'+str(i)+'.attention.wqkv.scales'] = layer["self_attn.qkv_proj"]["reordered_scales"].half()
-    new_dict['layers.'+str(i)+'.attention.wo.q_residual'] = layer["self_attn.o_proj"]["cheatsheet"]
-    new_dict['layers.'+str(i)+'.attention.wo.scales'] = layer["self_attn.o_proj"]["reordered_scales"].half()
+    if 'self_attn.qkv_proj' not in layer:
+        qkv_q_residual = torch.cat((layer["self_attn.q_proj"]["cheatsheet"],
+                                    layer["self_attn.k_proj"]["cheatsheet"],
+                                    layer["self_attn.v_proj"]["cheatsheet"]), dim=1)
+        new_dict['layers.'+str(i)+'.attention.wqkv.q_residual'] = qkv_q_residual
+        qkv_scales = torch.cat((layer["self_attn.q_proj"]["reordered_scales"],
+                                layer["self_attn.k_proj"]["reordered_scales"],
+                                layer["self_attn.v_proj"]["reordered_scales"]), dim=0)
+        new_dict['layers.'+str(i)+'.attention.wqkv.scales'] = qkv_scales
+    else:
+        new_dict['layers.'+str(i)+'.attention.wqkv.q_residual'] = layer["self_attn.qkv_proj"]["cheatsheet"]
+        new_dict['layers.'+str(i)+'.attention.wqkv.scales'] = layer["self_attn.qkv_proj"]["reordered_scales"]
+        new_dict['layers.'+str(i)+'.attention.wo.q_residual'] = layer["self_attn.o_proj"]["cheatsheet"]
+        new_dict['layers.'+str(i)+'.attention.wo.scales'] = layer["self_attn.o_proj"]["reordered_scales"]
 
-    new_dict['layers.'+str(i)+'.feed_forward.w1w3.q_residual'] = layer["mlp.gate_up_proj"]["cheatsheet"]
-    new_dict['layers.'+str(i)+'.feed_forward.w1w3.scales'] = layer["mlp.gate_up_proj"]["reordered_scales"].half()
-    new_dict['layers.'+str(i)+'.feed_forward.w2.q_residual'] = layer["mlp.down_proj"]["cheatsheet"]
-    new_dict['layers.'+str(i)+'.feed_forward.w2.scales'] = layer["mlp.down_proj"]["reordered_scales"].half()
-    
+    if 'mlp.gate_up_proj' not in layer:
+        w1w3_q_residual = torch.cat((layer["mlp.gate_proj"]["cheatsheet"],
+                                     layer["mlp.up_proj"]["cheatsheet"]), dim=1)
+        new_dict['layers.'+str(i)+'.feed_forward.w1w3.q_residual'] = w1w3_q_residual
+        w1w3_scales = torch.cat((layer["mlp.gate_proj"]["reordered_scales"],
+                                 layer["mlp.up_proj"]["reordered_scales"]), dim=0)
+        new_dict['layers.'+str(i)+'.feed_forward.w1w3.scales'] = w1w3_scales
+
+    else:
+        new_dict['layers.'+str(i)+'.feed_forward.w1w3.q_residual'] = layer["mlp.gate_up_proj"]["cheatsheet"]
+        new_dict['layers.'+str(i)+'.feed_forward.w1w3.scales'] = layer["mlp.gate_up_proj"]["reordered_scales"]
+
 del(ckpt)
 
 ###### threshold #######
 ckpt = torch.load(os.path.join(ckpt_dir, "thresholds.pt"))
 
 for i, layer in enumerate(ckpt):
-    new_dict['layers.'+str(i)+'.attention.wqkv.thresholds'] = layer["self_attn.qkv_proj"].half()
-    new_dict['layers.'+str(i)+'.attention.wo.thresholds'] = layer["self_attn.o_proj"].half()
+    new_dict['layers.'+str(i)+'.attention.wqkv.thresholds'] = layer["self_attn.qkv_proj"] if "self_attn.qkv_proj" in layer else layer["self_attn.q_proj"]
+    new_dict['layers.'+str(i)+'.attention.wo.thresholds'] = layer["self_attn.o_proj"]
 
-    new_dict['layers.'+str(i)+'.feed_forward.w1w3.thresholds'] = layer["mlp.gate_up_proj"].half()
-    new_dict['layers.'+str(i)+'.feed_forward.w2.thresholds'] = layer["mlp.down_proj"].half()
+    new_dict['layers.'+str(i)+'.feed_forward.w1w3.thresholds'] = layer["mlp.gate_up_proj"] if "mlp.gate_up_proj" in layer else layer["mlp.gate_proj"]
+    new_dict['layers.'+str(i)+'.feed_forward.w2.thresholds'] = layer["mlp.down_proj"]
 
 torch.save(new_dict, os.path.join(ckpt_dir, "cheatsheet.bin"))
 
