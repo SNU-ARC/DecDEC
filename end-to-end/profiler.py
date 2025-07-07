@@ -17,7 +17,7 @@ def get_gemv_kernel_name(algo, bit_width):
             raise ValueError(f"Unknown quantization algorithm: {algo}")
 
 
-def generate_across_configs(gemv_kernel_name, model, tokenizer, tokens_per_config, max_n_tb, max_k_chunk):
+def generate_across_configs(gemv_kernel_name, model, tokenizer, tokens_per_config, min_n_tb, max_n_tb, max_k_chunk):
     """Generates text for each configuration of n_tb and k_chunk and returns timing and decoded outputs."""
     trace = []
 
@@ -37,7 +37,7 @@ def generate_across_configs(gemv_kernel_name, model, tokenizer, tokens_per_confi
     num_layers = model.config.n_layer
     kernel_calls_per_module_per_config = num_layers * tokens_per_config
 
-    n_tb_list = range(1, max_n_tb + 1)
+    n_tb_list = range(min_n_tb, max_n_tb + 1)
     k_chunk_list = range(0, max_k_chunk + 1)
 
     # Perform model compilation with the first invocation
@@ -146,10 +146,12 @@ def record_trace(trace, call_type, kernel_calls_per_module_per_config, gemv_kern
 
 def main(
     dtype,
-    backend,
+    quant_algo,
     bitwidth,
     model_name,
     halve_layers,
+    checkpoint_path,
+    min_n_tb,
     max_n_tb,
     max_k_chunk,
     tokens_per_config,
@@ -159,23 +161,29 @@ def main(
     print(f"Profiling model: {model_name}")
     print(f"Quantization algorithm: {quant_algo}")
     print(f"Bitwidth: {bitwidth}")
-    print(f"Max number of threadblocks: {max_n_tb}")
+    print(f"Threadblocks: {min_n_tb} - {max_n_tb}")
     print(f"Max k_chunk: {max_k_chunk} per 1024")
     print(f"Tokens per config: {tokens_per_config}")
     print("==================================================================", flush=True)
     # Load model and tokenizer once, outside the compiled function
+
+    if quant_algo == 'sqllm':
+        backend = 'ap'
+    elif quant_algo == 'awq':
+        backend = 'lutgemm'
+    else:
+        raise ValueError(f"Unknown quantization algorithm: {quant_algo}")
+
     with nvtx.annotate(message="Loading Model", color=0xe706f9):
         model, tokenizer = generate.load_model(
-            model_name, 'cuda', quant_algo, bitwidth, n_tbs=1, k_chunks=[1, 1, 1, 1], dtype=dtype, halve_layers=halve_layers,
-        )
-        model, tokenizer = generate.load_model(
-            model_name, 'cuda', backend, bitwidth, n_tbs=1, k_chunks=[1, 1, 1, 1], checkpoint_path=checkpoint_path, dtype=dtype, halve_layers=halve_layers,
+            model_name, 'cuda', backend, bitwidth, n_tbs=1, k_chunks=[1, 1, 1, 1], dtype=dtype,
+             checkpoint_path=checkpoint_path,halve_layers=halve_layers,
         )
     # Run the generate_across_configs function and get results
     gemv_kernel_name = get_gemv_kernel_name(quant_algo, bitwidth)
 
     trace = generate_across_configs(
-        gemv_kernel_name, model, tokenizer, tokens_per_config, max_n_tb, max_k_chunk
+        gemv_kernel_name, model, tokenizer, tokens_per_config, min_n_tb, max_n_tb, max_k_chunk
     )
 
     print(f"Writing trace to {trace_file}", flush=True)
@@ -189,12 +197,14 @@ if __name__ == '__main__':
 
     parser.add_argument('--dtype', type=str, default="fp16", help='dtype',
                         choices=["fp16", "fp32", "bf16"])
-    parser.add_argument('--backend', type=str, help='Quantization algorithm to use',
-                        choices=["ap", "lutgemm"], default="lutgemm")
+    parser.add_argument('--quant_algo', type=str, help='Quantization algorithm',
+                        choices=["sqllm", "awq"], default="sqllm")
     parser.add_argument('--bitwidth', type=int, help='Bitwidth', choices=[3, 4], default=3)
     parser.add_argument('--model_name', type=str, help='Model name',
                         default='Meta-Llama-3-8B-Instruct')
-    parser.add_argument('--max_n_tb', type=int, help='Max number of threadblocks', default=4)
+    parser.add_argument('--checkpoint_path', type=str, help='Path to model checkpoint')
+    parser.add_argument('--min_n_tb', type=int, help='Min number of threadblocks', default=8)
+    parser.add_argument('--max_n_tb', type=int, help='Max number of threadblocks', default=24)
     parser.add_argument('--max_k_chunk', type=int, help='Max k_chunk', default=8)
     parser.add_argument('--tokens_per_config', type=int, help='Number of tokens per config', default=10)
     parser.add_argument('--trace_file', type=str, help='File to write trace to', default='trace.txt')
@@ -210,10 +220,12 @@ if __name__ == '__main__':
 
     main(
         dtype=dtype_map[args.dtype],
-        backend=args.backend,
+        quant_algo=args.quant_algo,
         bitwidth=args.bitwidth,
         model_name=args.model_name,
+        checkpoint_path=args.checkpoint_path,
         halve_layers=args.halve_layers,
+        min_n_tb=args.min_n_tb,
         max_n_tb=args.max_n_tb,
         max_k_chunk=args.max_k_chunk,
         tokens_per_config=args.tokens_per_config,

@@ -1,22 +1,23 @@
 model_configurations = {
-    'Phi-3-medium-4k-instruct': {
-        'qkv': (5120, 7680),
-        'o': (5120, 5120),
-        'gu': (5120, 35840),
-        'd': (17920, 5120),
-    },
-    # 'Meta-Llama-3-8B-Instruct': {
-    #     'qkv': (4096, 6144),
-    #     'o': (4096, 4096),
-    #     'gu': (4096, 28672),
-    #     'd': (14336, 4096),
+    # 'Phi-3-medium-4k-instruct': {
+    #     'qkv': (5120, 7680),
+    #     'o': (5120, 5120),
+    #     'gu': (5120, 35840),
+    #     'd': (17920, 5120),
     # },
-    'Meta-Llama-3-70B-Instruct': {
-        'qkv': (8192, 10240),
-        'o': (8192, 8192),
-        'gu': (8192, 57344),
-        'd': (28672, 8192),
+    'Meta-Llama-3-8B-Instruct': {
+        'checkpoint_path': '../end-to-end/anyprec-(Meta-Llama-3-8B-Instruct)-w3_orig3-gc1-c4_s100_blk512',
+        'qkv': (4096, 6144),
+        'o': (4096, 4096),
+        'gu': (4096, 28672),
+        'd': (14336, 4096),
     },
+    # 'Meta-Llama-3-70B-Instruct': {
+    #     'qkv': (8192, 10240),
+    #     'o': (8192, 8192),
+    #     'gu': (8192, 57344),
+    #     'd': (28672, 8192),
+    # },
 }
 
 _halve_layers = {  # Whether to halve the number of layers in the model to prevent OOM
@@ -26,12 +27,14 @@ _halve_layers = {  # Whether to halve the number of layers in the model to preve
 def halve_layers(model_name, algo, bit_width):
     return (model_name, algo, bit_width) in _halve_layers
 
-algos = ['awq', 'sqllm']
-bitwidths = [3, 4]
+#algos = ['awq', 'sqllm']
+algos = ['sqllm']
+#bitwidths = [3, 4]
+bitwidths = [3]
 
 fp_dtype = 'fp16'
-nsys_path = "/usr/local/bin/nsys"
-profiler_path = '/work/syphon/end-to-end/gpt-fast/profiler.py'
+nsys_path = 'nsys'
+profiler_path = '../end-to-end/profiler.py'
 csv_output_path = 'timings.csv'
 tokens_per_config = 10
 

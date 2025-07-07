@@ -12,7 +12,7 @@ Once you have:
       # SqueezeLLM models (Any-precision LLM backend)
       python ap_convert.py --ckpt_dir ${CHECKPOINT_PATH}
       
-      # AWQ models (LUTGEMM LLM backend)
+      # AWQ models (LUTGEMM backend)
       python lutgemm_convert.py --ckpt_dir ${CHECKPOINT_PATH}
       ```
       

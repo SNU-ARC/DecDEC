@@ -89,14 +89,52 @@ def decode_one_token(model: Transformer, x: torch.Tensor, input_pos: torch.Tenso
     return sample(logits, **sampling_kwargs)
 
 
-def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, callback=lambda _: _, **sampling_kwargs): 
+def decode_one_token_inplace(model: Transformer, x: torch.Tensor, input_pos: torch.Tensor, next_token: torch.Tensor, next_prob: torch.Tensor, **sampling_kwargs):
+    next_token[...], next_prob[...] = decode_one_token(model, x, input_pos, **sampling_kwargs)
+
+
+
+def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torch.Tensor, num_new_tokens: int, use_graph=False, callback=lambda _: _, **sampling_kwargs):
+    # WARNING: DO NOT pass use_graph=True for the first invocation after torch.compile, as torch.compile will only successfully compile with use_graph=False
+    # if you're using torch.compile without CUDA graphs, you may set use_graph to True after the first invocation to speed up subsequent calls
+    graph = None
+    if use_graph:
+        # Allocate static input tensors
+        static_cur_token = cur_token.clone()
+        static_input_pos = input_pos.clone()
+
+        # Set requires_grad=False for inference
+        static_cur_token.requires_grad = False
+        static_input_pos.requires_grad = False
+
+        # Pre-allocate static output tensors
+        static_next_token = torch.empty_like(static_cur_token)
+        static_next_prob = torch.empty((1, model.config.vocab_size), dtype=torch.float32, device='cuda')
+
+        graph = torch.cuda.CUDAGraph()
+        with nvtx.annotate("Capturing CUDA graph", color='cyan'):
+            with torch.cuda.graph(graph):
+                decode_one_token_inplace(
+                    model, static_cur_token, static_input_pos, static_next_token, static_next_prob, **sampling_kwargs
+                )
+            torch.cuda.synchronize()
+
     new_tokens, new_probs = [], []
     with nvtx.annotate("Decoding tokens", color='orange'):
         for i in range(num_new_tokens):
             with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True):
-                next_token, next_prob = decode_one_token(
-                    model, cur_token, input_pos, **sampling_kwargs
-                )
+                if use_graph:
+                    # Update inputs in-place
+                    static_cur_token.copy_(cur_token)
+                    static_input_pos.copy_(input_pos)
+                    graph.replay()
+                    # Retrieve outputs from static output tensors
+                    next_token = static_next_token.clone()
+                    next_prob = static_next_prob.clone()
+                else:
+                    next_token, next_prob = decode_one_token(
+                        model, cur_token, input_pos, **sampling_kwargs
+                    )
                 
                 # Update position and tokens
                 input_pos += 1
@@ -105,6 +143,9 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
                 new_probs.append(next_prob.clone())
                 cur_token = next_token.clone()
         torch.cuda.synchronize()
+
+    if use_graph:
+        graph.reset()  # Release CUDA graph resources
 
     return new_tokens, new_probs
 
@@ -117,6 +158,7 @@ def generate(
     model: Transformer,
     prompt: torch.Tensor,
     max_new_tokens: int,
+    use_graph: bool = False,
     batch_size: int = 1,
     callback = lambda x: x,
     **sampling_kwargs
@@ -144,12 +186,12 @@ def generate(
         seq[:, T] = next_token.squeeze()
         input_pos = torch.tensor([T], device=device, dtype=torch.int).view(1)
         generated_tokens, new_probs = decode_n_tokens(model, next_token.view(batch_size, -1),
-                          input_pos, max_new_tokens-1, callback=callback, **sampling_kwargs)
+                          input_pos, max_new_tokens-1, use_graph, callback=callback, **sampling_kwargs)
         seq[:, T + 1:] = torch.cat(generated_tokens, dim=-1)
 
     else:
         generated_tokens, new_probs = decode_n_tokens(model, prompt.view(batch_size, -1),
-                              input_pos, max_new_tokens, callback=callback, **sampling_kwargs)
+                              input_pos, max_new_tokens, use_graph, callback=callback, **sampling_kwargs)
         seq[:, 1:] = torch.cat(generated_tokens, dim=-1)
         
     return seq

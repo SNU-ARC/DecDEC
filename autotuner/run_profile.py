@@ -63,8 +63,10 @@ for model_name, algo, bitwidth in product(config.model_configurations.keys(), co
         print(f"Output file {output_path}.trace already exists, skipping...")
         continue
 
+    checkpoint_path = config.model_configurations[model_name]['checkpoint_path']
+
     command = (f"{config.nsys_path} profile --cuda-graph-trace=node --output={output_path} --export=sqlite --force-overwrite=true -s none --cpuctxsw=none "  # temporarily disable all traces to isolate bug
-               f"python3 {config.profiler_path} --dtype {config.fp_dtype} --quant_algo {algo} --bitwidth {bitwidth} --model_name {model_name} --min_n_tb {min_n_tb} --max_n_tb {max_n_tb} --max_k_chunk {max_k_chunk} --tokens_per_config {tokens_per_config}  --trace_file {output_path + '.trace'} {'--halve_layers' if halve_layers else ''}")
+               f"python3 {config.profiler_path} --dtype {config.fp_dtype} --quant_algo {algo} --bitwidth {bitwidth} --model_name {model_name} --checkpoint_path '{checkpoint_path}' --min_n_tb {min_n_tb} --max_n_tb {max_n_tb} --max_k_chunk {max_k_chunk} --tokens_per_config {tokens_per_config}  --trace_file {output_path + '.trace'} {'--halve_layers' if halve_layers else ''}")
 
     print("Command: ", command)
     print("======================================================================")
