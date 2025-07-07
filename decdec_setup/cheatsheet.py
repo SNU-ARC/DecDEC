@@ -180,10 +180,13 @@ def create_cheatsheet(
     cheatsheet_save_path = os.path.join(save_path, 'cheatsheet.pt')
 
     # These paths will be used to save quantized residuals if extra_bit_widths is True
-    quantized_residuals_paths = {
-        2: save_path + '/quantized_residuals_2bit.pt',
-        8: save_path + '/quantized_residuals_8bit.pt'
-    }
+    if save_extra_bit_widths:
+        quantized_residuals_paths = {
+            2: save_path + '/quantized_residuals_2bit.pt',
+            8: save_path + '/quantized_residuals_8bit.pt'
+        }
+    else:
+        quantized_residuals_paths = {}
 
     # Check if all files exist to avoid overwriting
     if os.path.exists(cheatsheet_save_path) and all(os.path.exists(path) for path in quantized_residuals_paths.values()):

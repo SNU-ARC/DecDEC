@@ -9,7 +9,7 @@ This is a **reference implementation** for testing and analysing model accuracy,
 ## Usage
 
 Once you have:
-- A real-quantized model (e.g., from SqueezeLLM or AWQ)
+- A real-quantized model checkpoint (e.g., from SqueezeLLM or AWQ)
 - `cheatsheet.pt` and `thresholds.pt` (produced from `cheatsheet.py` and `thresholds.py` in [`decdec_setup/`](../decdec_setup/))
 - DecDEC hyperparameters (`k_chunk`) from the [autotuner](../autotuner/)
 
@@ -18,6 +18,8 @@ You can refer to [`run_eval.py`](./run_eval.py) for an example on how to:
 - Load a quantized model with DecDEC
 - Set different `k_chunk` values and evaluation modes
 - Run LM-eval tasks or perplexity evaluation
+
+The results will be saved to `results_lm_eval` and `results_perplexity` directories, respectively.
 
 `run_eval.py` uses utility functions from `evaltools.py`.
 

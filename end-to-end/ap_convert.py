@@ -48,13 +48,25 @@ for key in new_dict.keys():
     if ('qweight' in key):
         new_dict[key] = new_dict[key].contiguous()
 
-for i in range(32):
+# count number of layers by checking the maximum index in the keys
+num_layers = 0
+for key in new_dict.keys():
+    if 'layers.' in key:
+        match = re.search(r'layers\.(\d+)\.', key)
+        if match:
+            layer_index = int(match.group(1))
+            num_layers = max(num_layers, layer_index + 1)
+
+print(f"Number of layers detected: {num_layers}")
+
+for i in range(num_layers):
     # qkv fusion
-    if 'wqkv' not in new_dict: 
+    new_key_qweight = 'layers.'+str(i)+'.attention.wqkv.qweight'
+    if new_key_qweight not in new_dict: 
         key_q_qweight = 'layers.'+str(i)+'.attention.q_proj.qweight'
         key_k_qweight = 'layers.'+str(i)+'.attention.k_proj.qweight'
         key_v_qweight = 'layers.'+str(i)+'.attention.v_proj.qweight'
-        new_key_qweight = 'layers.'+str(i)+'.attention.wqkv.qweight'
+        #new_key_qweight = 'layers.'+str(i)+'.attention.wqkv.qweight'
 
         new_dict[new_key_qweight] = torch.cat((new_dict[key_q_qweight],
                                                new_dict[key_k_qweight],
@@ -79,10 +91,11 @@ for i in range(32):
         del(new_dict[key_v_lut])
     
     # gate up fusion
-    if 'w1w3' not in new_dict:
+    new_key_qweight = 'layers.'+str(i)+'.feed_forward.w1w3.qweight'
+    if new_key_qweight not in new_dict:
         key_gate_qweight = 'layers.'+str(i)+'.feed_forward.gate_proj.qweight'
         key_up_qweight = 'layers.'+str(i)+'.feed_forward.up_proj.qweight'
-        new_key_qweight = 'layers.'+str(i)+'.feed_forward.w1w3.qweight'
+        #new_key_qweight = 'layers.'+str(i)+'.feed_forward.w1w3.qweight'
         new_dict[new_key_qweight] = torch.cat((new_dict[key_gate_qweight],
                                                new_dict[key_up_qweight]), dim=1)
 
@@ -118,8 +131,8 @@ for i, layer in enumerate(ckpt):
     else:
         new_dict['layers.'+str(i)+'.attention.wqkv.q_residual'] = layer["self_attn.qkv_proj"]["cheatsheet"]
         new_dict['layers.'+str(i)+'.attention.wqkv.scales'] = layer["self_attn.qkv_proj"]["reordered_scales"]
-        new_dict['layers.'+str(i)+'.attention.wo.q_residual'] = layer["self_attn.o_proj"]["cheatsheet"]
-        new_dict['layers.'+str(i)+'.attention.wo.scales'] = layer["self_attn.o_proj"]["reordered_scales"]
+    new_dict['layers.'+str(i)+'.attention.wo.q_residual'] = layer["self_attn.o_proj"]["cheatsheet"]
+    new_dict['layers.'+str(i)+'.attention.wo.scales'] = layer["self_attn.o_proj"]["reordered_scales"]
 
     if 'mlp.gate_up_proj' not in layer:
         w1w3_q_residual = torch.cat((layer["mlp.gate_proj"]["cheatsheet"],
@@ -147,6 +160,13 @@ for i, layer in enumerate(ckpt):
 
     new_dict['layers.'+str(i)+'.feed_forward.w1w3.thresholds'] = layer["mlp.gate_up_proj"] if "mlp.gate_up_proj" in layer else layer["mlp.gate_proj"]
     new_dict['layers.'+str(i)+'.feed_forward.w2.thresholds'] = layer["mlp.down_proj"]
+
+
+# Convert all to half
+for key in new_dict.keys():
+    # if data type is float32 or bfloat16, convert to half
+    if new_dict[key].dtype == torch.float32 or new_dict[key].dtype == torch.bfloat16:
+        new_dict[key] = new_dict[key].half()
 
 torch.save(new_dict, os.path.join(ckpt_dir, "cheatsheet.bin"))
 

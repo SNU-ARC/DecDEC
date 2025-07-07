@@ -272,7 +272,6 @@ class Attention(nn.Module):
         self.head_dim = config.head_dim
         self.n_local_heads = config.n_local_heads
         self.dim = config.dim
-        self._register_load_state_dict_pre_hook(self.load_hook)
         self.config = config
 
         self.scaling = 1/ math.sqrt(config.head_dim)

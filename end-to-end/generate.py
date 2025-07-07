@@ -28,6 +28,11 @@ warnings.filterwarnings(
     category=FutureWarning
 )
 
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+)
+
 def device_sync(device):
     if "cuda" in device:
         torch.cuda.synchronize(device)
@@ -50,7 +55,6 @@ wd = Path(__file__).parent.parent.resolve()
 sys.path.append(str(wd))
 
 from model import Transformer
-from tokenizer import get_tokenizer
 
 def multinomial_sample_one_no_sync(probs_sort): # Does multinomial sampling without a cuda synchronization
     q = torch.empty_like(probs_sort).exponential_(1)
@@ -113,6 +117,7 @@ def generate(
     model: Transformer,
     prompt: torch.Tensor,
     max_new_tokens: int,
+    batch_size: int = 1,
     callback = lambda x: x,
     **sampling_kwargs
 ) -> torch.Tensor:
@@ -158,7 +163,7 @@ def encode_bos(tokenizer, device=default_device):
 
 def load_model(model_name, device, backend,  
                 bitwidth, n_tbs, k_chunks, 
-                checkpoint_path, dtype=None):
+                checkpoint_path, dtype=None, halve_layers=False):
     use_cuda = 'cuda' in device
 
     model_path = os.path.join(checkpoint_path, "converted_pytorch_model.bin")
@@ -187,6 +192,7 @@ def load_model(model_name, device, backend,
         linear_class=linear_class,
         linear_kwargs=linear_kwargs,
         bitwidth_map=bitwidth_map,
+        halve_layers=halve_layers,
     )
 
     print("Loading weights ...", flush=True)
@@ -248,6 +254,7 @@ def main(
         global decode_one_token
         mode = 'max-autotune-no-cudagraphs' if compile == 1 else 'max-autotune'
         decode_one_token = torch.compile(decode_one_token, mode=mode, fullgraph=True, dynamic=False)
+        print("Compiling model with torch.compile, mode:", mode, flush=True)
         
     aggregate_metrics = {
         'tokens_per_sec': [],
@@ -267,7 +274,7 @@ def main(
                 model,
                 encoded,
                 max_new_tokens,
-                batch_size=batch_size,
+                batch_size=1,
                 callback=callback,
                 temperature=temperature,
                 top_k=top_k,
@@ -289,7 +296,6 @@ def main(
         print(flush=True)
     print("==========")
 
-    print(f"Batch Size: {batch_size}")
     print(f"Prompt Length: {prompt_length}")
     print(f"Generated tokens: {max_new_tokens}")
     print(f"Average tokens/sec: {torch.mean(torch.tensor(aggregate_metrics['tokens_per_sec'])).item():.2f}")
