@@ -5,51 +5,46 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 import pickle
-import config
 from itertools import product
 
 
-def dump_to_csv(results, csv_output_path):
+def dump_to_csv(result_by_module, csv_output_path, model_name, algo, bit_width):
     csv_entries = []
     csv_entries.append(
         ('model', 'algo', 'bit_width', 'module', 'standalone/concurrent', 'n_tb', 'k_chunk', 
-        'decdec_time_us', 'gemv_time_us', 'dec_time_us', 'orderings'))
+         'decdec_time_us', 'gemv_time_us', 'dec_time_us', 'orderings'))
 
-    for model_name, model_results in results.items():
-        for algo, bit_width_results in model_results.items():
-            for bit_width, module_results in bit_width_results.items():
-                for module_name, (standalone_quant_kernel_time, avg_times, gemv_times, dec_times, 
-                                  orderings_per_tb) in module_results.items():
-                    # standalone baseline row
-                    csv_entries.append( (model_name, algo, bit_width, module_name, 'standalone', 0, 0,
-                         '', f"{standalone_quant_kernel_time:.2f}", ''))
+    for module_name, (standalone_quant_kernel_time, avg_times, gemv_times, dec_times, orderings_per_tb) in result_by_module.items():
+        # standalone baseline row
+        csv_entries.append((
+            model_name, algo, bit_width, module_name, 'standalone', 0, 0,
+            '', f"{standalone_quant_kernel_time:.2f}", '', ''
+        ))
 
-                    # concurrent timings
-                    for n_tb, time_by_num_rows in avg_times.items():
-                        for k_chunk, time in time_by_num_rows.items():
-                            gemv_time = gemv_times.get(n_tb, {}).get(k_chunk, '')
-                            dec_time = dec_times.get(n_tb, {}).get(k_chunk, '')
-                            orderings = orderings_per_tb.get(n_tb, {}).get(k_chunk, '')
-                            ordering_strings = []
-                            for ordering in orderings:
-                                ordering_strings.append('>'.join(nsys_parser.index_to_kernel_ordering(ordering)))
-                            csv_entries.append(
-                                (
-                                    model_name, algo, bit_width, module_name,
-                                    'concurrent', n_tb, k_chunk,
-                                    f"{time:.2f}",
-                                    f"{gemv_time:.2f}" if gemv_time else '',
-                                    f"{dec_time:.2f}" if dec_time else '',
-                                    ' | '.join(ordering_strings) if orderings else ''
-                                 )
-                            )
+        # concurrent timings
+        for n_tb, time_by_num_rows in avg_times.items():
+            for k_chunk, time in time_by_num_rows.items():
+                gemv_time = gemv_times.get(n_tb, {}).get(k_chunk, '')
+                dec_time = dec_times.get(n_tb, {}).get(k_chunk, '')
+                orderings = orderings_per_tb.get(n_tb, {}).get(k_chunk, '')
+                ordering_strings = []
+                for ordering in orderings:
+                    ordering_strings.append('>'.join(nsys_parser.index_to_kernel_ordering(ordering)))
+                csv_entries.append((
+                    model_name, algo, bit_width, module_name,
+                    'concurrent', n_tb, k_chunk,
+                    f"{time:.2f}",
+                    f"{gemv_time:.2f}" if gemv_time else '',
+                    f"{dec_time:.2f}" if dec_time else '',
+                    ' | '.join(ordering_strings) if orderings else ''
+                ))
 
     with open(csv_output_path, 'w') as f:
         writer = csv.writer(f)
         writer.writerows(csv_entries)
 
 
-def plot_results_by_tb(prefix, fp_dtype, results):
+def plot_results_by_tb(prefix, fp_dtype, results, matrix_dims):
     os.makedirs("./plots", exist_ok=True)
     for model_name, model_results in results.items():
         for algo, bit_width_results in model_results.items():
@@ -60,7 +55,7 @@ def plot_results_by_tb(prefix, fp_dtype, results):
                         print(f"Plot {plot_path} already exists, skipping...")
                         continue
 
-                    matrix_dim = config.model_configurations[model_name][module_name]
+                    matrix_dim = matrix_dims[module_name]
                     unique_n_tb = len(decdec_times.keys())
                     print(f"Plotting results for: {prefix} {model_name} {fp_dtype} {algo} {bit_width}-bit {module_name} ({matrix_dim[0]}x{matrix_dim[1]})")
 
@@ -130,21 +125,21 @@ def plot_results_by_tb(prefix, fp_dtype, results):
                     plt.close()
 
 
-def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
+def tuner(results_by_module, target_slowdown, matrix_dims):
     # ===================== Set targets =====================
     print("========================== Begin Tuning ===========================")
 
     # Compute baseline times for each module
     time_by_module_baseline = []
-    for module_name in model_layer_config:
+    for module_name in matrix_dims:
         baseline_time, _, _, _, _ = results_by_module[module_name]
         time_by_module_baseline.append(baseline_time)
 
     layer_baseline = sum(time_by_module_baseline)
 
     print(f"Layer baseline: {layer_baseline:.2f} us")
-    for i, module_name in enumerate(model_layer_config):
-        matrix_dim = model_layer_config[module_name]
+    for i, module_name in enumerate(matrix_dims):
+        matrix_dim = matrix_dims[module_name]
         print(f"    {module_name} ({matrix_dim[0]} x {matrix_dim[1]}): {time_by_module_baseline[i]:.2f} us")
 
     layer_target = layer_baseline * target_slowdown
@@ -159,7 +154,7 @@ def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
     best_layer_time = float('inf')
 
     # Initialize included matrices
-    included_modules = list(model_layer_config.keys())
+    included_modules = list(matrix_dims.keys())
     excluded_modules = []
 
     # Find maximum k_chunk and n_tb across all modules
@@ -179,7 +174,7 @@ def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
     )
 
     # Sort matrices by size (smallest to largest) based on matrix_dim[0] * matrix_dim[1]
-    sorted_modules = sorted(model_layer_config, key=lambda module_name: model_layer_config[module_name][0] * model_layer_config[module_name][1])
+    sorted_modules = sorted(matrix_dims, key=lambda module_name: matrix_dims[module_name][0] * matrix_dims[module_name][1])
 
     while True:
         # Reset variables for each iteration
@@ -249,13 +244,13 @@ def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
                 print("Unable to fetch any rows for any matrices within the target.")
                 break
             else:
-                print(f"Excluding smallest module {smallest_module} ({model_layer_config[smallest_module][0]} x {model_layer_config[smallest_module][1]}) and retrying global search...")
+                print(f"Excluding smallest module {smallest_module} ({matrix_dims[smallest_module][0]} x {matrix_dims[smallest_module][1]}) and retrying global search...")
 
 
     # Compute time by module with the best global parameters
     time_by_module = []
     n_tb_per_module = []
-    for module_name in model_layer_config:
+    for module_name in matrix_dims:
         if module_name in included_modules:
             _, avg_times_by_tb, _, _, _ = results_by_module[module_name]
             valid_num_tb = [num_tb for num_tb in avg_times_by_tb.keys() if num_tb <= best_max_n_tb]
@@ -273,8 +268,8 @@ def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
     print(f"Global k_chunk: {global_best_k_chunk} / 1024")
     print(f"Layer time: {best_layer_time:.2f} us "
           f"(Slowdown: {best_layer_time / layer_baseline:.2f})")
-    for i, module_name in enumerate(model_layer_config):
-        matrix_dim = model_layer_config[module_name]
+    for i, module_name in enumerate(matrix_dims):
+        matrix_dim = matrix_dims[module_name]
         status = "(excluded)" if module_name in excluded_modules else ""
         print(f"    {module_name} ({matrix_dim[0]} x {matrix_dim[1]}): {time_by_module[i]:.2f} us {status}")
 
@@ -283,7 +278,7 @@ def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
 
     # Initialize per-module parameters for fine-grained search
     k_chunk_per_module = []
-    for module_name in model_layer_config:
+    for module_name in matrix_dims:
         if module_name in included_modules:
             k_chunk_per_module.append(global_best_k_chunk)
         else:
@@ -291,7 +286,7 @@ def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
 
     while True:
         time_deltas_by_module = []
-        for i, module_name in enumerate(model_layer_config):
+        for i, module_name in enumerate(matrix_dims):
             if module_name in included_modules:
                 _, avg_times_by_tb, _, _, _ = results_by_module[module_name]
                 n_tb = n_tb_per_module[i]
@@ -325,11 +320,11 @@ def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
             break
 
     print("Fine-grained k_chunk:")
-    for i, module_name in enumerate(model_layer_config):
+    for i, module_name in enumerate(matrix_dims):
         n_tb = n_tb_per_module[i]
         n_rows = k_chunk_per_module[i]
         if module_name in included_modules:
-            matrix_dim = model_layer_config[module_name]
+            matrix_dim = matrix_dims[module_name]
             print(f"    {module_name} ({matrix_dim[0]} x {matrix_dim[1]}): {n_rows} / 1024 "
                   f"(n_tb={n_tb})")
         else:
@@ -338,15 +333,15 @@ def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
     fine_grained_layer_time = sum(time_by_module)
     print(f"Fine-grained layer time: {fine_grained_layer_time:.2f} us "
           f"(Slowdown: {fine_grained_layer_time / layer_baseline:.2f})")
-    for i, module_name in enumerate(model_layer_config):
-        matrix_dim = model_layer_config[module_name]
+    for i, module_name in enumerate(matrix_dims):
+        matrix_dim = matrix_dims[module_name]
         status = "(excluded)" if module_name in excluded_modules else ""
         print(f"    {module_name} ({matrix_dim[0]} x {matrix_dim[1]}): {time_by_module[i]:.2f} us {status}")
 
     print("========================== End Tuning ===========================")
 
     results = {
-        "model_layer_config": model_layer_config,
+        "matrix_dims": matrix_dims,
         "best_max_n_tb": best_max_n_tb,
         "threadblocks_per_module": n_tb_per_module,
         "k_chunk_per_module": k_chunk_per_module,
@@ -357,46 +352,63 @@ def tuner(model_layer_config, results_by_module, target_slowdown=1.1):
 
 
 if __name__ == '__main__':
-    # Get prefix from command line
-    if len(sys.argv) != 2:
-        print("Usage: python tuner.py <prefix>")
-        sys.exit(1)
+    import argparse
 
-    prefix = sys.argv[1]
+    parser = argparse.ArgumentParser(description="DecDEC tuning driver.")
+    parser.add_argument("prefix", help="Prefix for .trace and output files")
+    parser.add_argument("--fp_dtype", required=True, choices=["fp16", "bf16", "fp32"],
+                        help="GEMV compute precision (e.g., fp16)")
+    parser.add_argument("--model_name", required=True)
+    parser.add_argument("--algo", required=True)
+    parser.add_argument("--bitwidth", type=int, required=True)
+
+    # Accept matrix dims via CLI
+    parser.add_argument("--qkv", nargs=2, type=int, required=True)
+    parser.add_argument("--o", nargs=2, type=int, required=True)
+    parser.add_argument("--gu", nargs=2, type=int, required=True)
+    parser.add_argument("--d", nargs=2, type=int, required=True)
+
+    parser.add_argument("--target_slowdown", type=float, default=2.5,
+                        help="Slowdown target for tuning, e.g., 2.5 for 2.5%% slowdown")
+
+    args = parser.parse_args()
+
+    prefix      = args.prefix
+    fp_dtype    = args.fp_dtype
+    model_name  = args.model_name
+    algo        = args.algo
+    bit_width   = args.bitwidth
+    slowdown    = args.target_slowdown / 100 + 1  # Convert percentage to multiplier
+
+    matrix_dims = {
+        "qkv": tuple(args.qkv),
+        "o":   tuple(args.o),
+        "gu":  tuple(args.gu),
+        "d":   tuple(args.d),
+    }
+
+    modules = list(matrix_dims.keys())
 
     print("Processing profile results...")
-    results = nsys_parser.get_all_results(prefix, config.fp_dtype)
+    results_by_module = nsys_parser.parse_results(prefix, fp_dtype, model_name, modules, algo, bit_width)
 
     print("Dumping results to csv...")
-    # dump results to csv for us humans to read, if interested
-    dump_to_csv(results, f"{prefix}_timings.csv")
+    csv_output_path = f"./csv/{prefix}_{model_name}_{fp_dtype}_{algo}_{bit_width}.csv"
+    os.makedirs("./csv", exist_ok=True)
+    dump_to_csv(results_by_module, csv_output_path, model_name, algo, bit_width)
 
     print("Plotting results...")
-    # plot results by n_tb
-    plot_results_by_tb(prefix, config.fp_dtype, results)
+    plot_results_by_tb(prefix, fp_dtype, {model_name: {algo: {bit_width: results_by_module}}}, matrix_dims)
 
-    target_slowdowns = [1.025, 1.05, 1.1, 1.2]
+    print(f"\n>>> Tuning {model_name} {algo} {bit_width}-bit @ {slowdown:.3f}x target <<<")
+    tuner_results = tuner(results_by_module, slowdown, matrix_dims)
 
-    all_tuner_results = {}
-
-    for model_name in results:
-        for algo in results[model_name]:
-            for bit_width in results[model_name][algo]:
-                print(f"\n>>> Tuning {model_name} {algo} {bit_width}-bit <<<")
-                for target_slowdown in target_slowdowns:
-                    all_tuner_results[(model_name, algo, bit_width, target_slowdown)] = tuner(
-                        config.model_configurations[model_name],
-                        results[model_name][algo][bit_width],
-                        target_slowdown,
-                    )
-
-    for model_name in results:
-        for algo in results[model_name]:
-            for bit_width in results[model_name][algo]:
-                print(f"\n>>> {model_name} {algo} {bit_width}-bit <<<")
-                for target_slowdown in target_slowdowns:
-                    tuner_results = all_tuner_results[(model_name, algo, bit_width, target_slowdown)]
-                    n_tb = tuner_results["best_max_n_tb"]
-                    k_per_matrix = tuner_results["k_chunk_per_module"]
-                    print(f"({','.join(map(str, k_per_matrix))}) x{n_tb}")
-                print()
+    print()
+    print("~" * 70)
+    print(f"Tuning Results: {model_name} {algo} {bit_width}-bit @ {args.target_slowdown:.1f}% slowdown")
+    print("~" * 70)
+    print(f"{'Target Slowdown':25s}: {args.target_slowdown:.1f} %")
+    print(f"{'Best n_tb':25s}: {tuner_results['best_max_n_tb']}")
+    print(f"{'k_chunk per module':25s}: {', '.join(map(str, tuner_results['k_chunk_per_module']))}")
+    print("~" * 70)
+    print()

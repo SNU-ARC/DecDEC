@@ -1,6 +1,5 @@
 import json
 import pickle
-import config
 import os
 import functools
 import sqlite3
@@ -8,13 +7,14 @@ from collections import defaultdict
 from itertools import product
 import math
 from typing import Dict, List, Tuple, Any, Set
+import utils
 
 """
-nsys_parser.py (2025‑04‑23)
+nsys_parser.py
 ====================================
 * **Public API**
   * `get_avg_timings_by_module(...)`  → returns a **four‑tuple**
-  * `get_all_results(...)`            → convenience wrapper used by *tuner.py*
+  * `parse_results(...)`          → returns a **dict** of results per module
   * `kernel_ordering_to_index(...)`  → encode kernel orderings
   * `index_to_kernel_ordering(...)`  → decode kernel orderings
 
@@ -136,6 +136,7 @@ def index_to_kernel_ordering(index):
 def _process_profile(
     prefix: str,
     model: str,
+    modules: List[str],
     fp: str,
     algo: str,
     bits: int,
@@ -145,24 +146,23 @@ def _process_profile(
     Dict[str, Dict[int, Dict[int, List[int]]]],
     Dict[str, Dict[int, Dict[int, List[int]]]],
 ]:
-    path = config.get_output_path(prefix, model, fp, algo, bits)
-    gemv_name = config.get_gemv_kernel_name(algo, bits)
+    path = utils.get_output_path(prefix, model, fp, algo, bits)
+    gemv_name = utils.get_gemv_kernel_name(algo, bits)
 
-    events = _fetch_kernel_events(path + ".sqlite", [gemv_name, config.dec_kernel_name])
+    events = _fetch_kernel_events(path + ".sqlite", [gemv_name, utils.DEC_KERNEL_NAME])
     gemv_events = events[gemv_name]
-    dec_events = events[config.dec_kernel_name]
+    dec_events = events[utils.DEC_KERNEL_NAME]
 
     with open(path + ".trace") as f:
         traces = [ln.split() for ln in f]
     gemv_traces = [tr for tr in traces if gemv_name in tr]
-    dec_traces = [tr for tr in traces if config.dec_kernel_name in tr]
+    dec_traces = [tr for tr in traces if utils.DEC_KERNEL_NAME in tr]
 
     assert len(gemv_traces) == len(gemv_events), f"GEMV events: {len(gemv_events)}, traces: {len(gemv_traces)}"
     assert len(dec_traces) == len(dec_events), f"DEC events: {len(dec_events)}, traces: {len(dec_traces)}"
 
     trace_event_pairs = list(zip(gemv_traces, gemv_events)) + list(zip(dec_traces, dec_events))
 
-    modules = config.model_configurations[model]
     standalone: Dict[str, List[int]] = {m: [] for m in modules}
     decdec: Dict[str, Dict[int, Dict[int, List[int]]]] = {m: {} for m in modules}
     gemv_only: Dict[str, Dict[int, Dict[int, List[int]]]] = {m: {} for m in modules}
@@ -206,7 +206,7 @@ def _process_profile(
     assert all(len(p) == 2 for p in concurrent_pairs), "Each concurrent invocation should have exactly 2 entries (GEMV + DEC)."
 
     for (trace_a, event_a), (trace_b, event_b) in concurrent_pairs:
-        if config.dec_kernel_name in trace_a:
+        if utils.DEC_KERNEL_NAME in trace_a:
             dec_trace, dec_event = trace_a, event_a
             gemv_trace, gemv_event = trace_b, event_b
         else:
@@ -278,6 +278,7 @@ def _union_nested(d: Dict[int, Dict[int, List[int]]]) -> Dict[int, Dict[int, Set
 def get_avg_timings_by_module(
     prefix: str,
     model_name: str,
+    modules: List[str],
     fp_dtype: str,
     algo: str,
     bitwidth: int,
@@ -293,7 +294,7 @@ def get_avg_timings_by_module(
         with open(cache_path, "rb") as f:
             raw = pickle.load(f)
     else:
-        raw = _process_profile(prefix, model_name, fp_dtype, algo, bitwidth)
+        raw = _process_profile(prefix, model_name, modules, fp_dtype, algo, bitwidth)
         with open(cache_path, "wb") as f:
             pickle.dump(raw, f)
 
@@ -313,37 +314,28 @@ def get_avg_timings_by_module(
         {module: _union_nested(nested) for module, nested in ordering_raw.items()},
     )
 
+def parse_results(
+    prefix: str, fp_dtype: str, model_name: str, modules: List[str], algo: str, bitwidth: int
+):
+    """Returns dict[module] = (standalone avg, decdec avg, gemv avg, dec avg, ordering sets)."""
+    print(f"Processing {model_name} {algo} {bitwidth}-bit...")
 
-def get_all_results(prefix: str, fp_dtype: str):
-    """Returns dict[model][algo][bitwidth][module] =
-       (standalone avg, decdec avg, gemv avg, dec avg, ordering sets)."""
-    results: Dict[str, Any] = {}
+    (
+        avg_standalone_by_module,
+        avg_decdec_by_module,
+        avg_gemv_by_module,
+        avg_dec_by_module,
+        ordering_set_by_module,
+    ) = get_avg_timings_by_module(prefix, model_name, modules, fp_dtype, algo, bitwidth)
 
-    for algo, bitwidth, model_name in product(config.algos, config.bitwidths, config.model_configurations.keys()):
-        try:
-            print(f"Processing {model_name} {algo} {bitwidth}-bit...")
-
-            (
-                avg_standalone_by_module,
-                avg_decdec_by_module,
-                avg_gemv_by_module,
-                avg_dec_by_module,
-                ordering_set_by_module,
-            ) = get_avg_timings_by_module(prefix, model_name, fp_dtype, algo, bitwidth)
-
-            results.setdefault(model_name, {}).setdefault(algo, {}).setdefault(bitwidth, {})
-
-            for module_name in config.model_configurations[model_name]:
-                results[model_name][algo][bitwidth][module_name] = (
-                    avg_standalone_by_module[module_name],
-                    avg_decdec_by_module[module_name],
-                    avg_gemv_by_module[module_name],
-                    avg_dec_by_module[module_name],
-                    ordering_set_by_module[module_name],
-                )
-
-        except FileNotFoundError:
-            print("File not found, skipping...")
-            continue
+    results = {}
+    for module_name in avg_standalone_by_module:
+        results[module_name] = (
+            avg_standalone_by_module[module_name],
+            avg_decdec_by_module[module_name],
+            avg_gemv_by_module[module_name],
+            avg_dec_by_module[module_name],
+            ordering_set_by_module[module_name],
+        )
 
     return results

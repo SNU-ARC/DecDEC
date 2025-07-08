@@ -20,6 +20,7 @@ import nvtx
 from transformers import AutoTokenizer
 from APLinear import APLinear
 from LUTGEMMLinear import LUTGEMMLinear
+import loader
 
 import warnings
 
@@ -203,13 +204,22 @@ def encode_tokens(tokenizer, string, device=default_device):
 def encode_bos(tokenizer, device=default_device):
     return torch.tensor([tokenizer.bos_token_id], dtype=torch.int, device=device)
 
+def load_checkpoint(backend, checkpoint_path: str, dtype: torch.dtype) -> (dict, dict):
+    if backend == "ap":
+        load_func = loader.ap_load
+    elif backend == "lutgemm":
+        load_func = loader.lutgemm_load
+    else:
+        raise ValueError(f"Unknown backend: {backend}")
+
+    print(f"Loading checkpoint from {checkpoint_path} ...", flush=True)
+    return load_func(checkpoint_path, fp_dtype=dtype)
+    
+
 def load_model(model_name, device, backend,  
                 bitwidth, n_tbs, k_chunks, 
-                checkpoint_path, dtype=None, halve_layers=False):
+                checkpoint_path, dtype, halve_layers=False):
     use_cuda = 'cuda' in device
-
-    model_path = os.path.join(checkpoint_path, "converted_pytorch_model.bin")
-    dec_path = os.path.join(checkpoint_path, "cheatsheet.bin")
 
     bitwidth_map = None
     # Mixed precision, requires bitwidth map
@@ -238,21 +248,21 @@ def load_model(model_name, device, backend,
     )
 
     print("Loading weights ...", flush=True)
-    checkpoint = torch.load(model_path, mmap=True, weights_only=True)
+    checkpoint, dec_data = load_checkpoint(backend, checkpoint_path, dtype)
+
     model.load_state_dict(checkpoint, assign=True, strict=True)
 
     print("Dispatching model to device ...", flush=True)
     model=model.to(device=device, dtype=dtype)
 
     # load & set up DEC
-    print("Loading residuals ...", flush=True)
+    print("Setting residuals ...", flush=True)
     buffer_size = 32 * 1024
-    dec_data = torch.load(dec_path, weights_only=True)
     model.load_dec_data(dec_data)
     model.create_dec_context(n_tbs, buffer_size)
     model.set_dec_config(k_chunks)
 
-    tokenizer = AutoTokenizer.from_pretrained(os.path.dirname(model_path))
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint_path)
    
     print("Model loaded.", flush=True)
     return model.eval(), tokenizer
@@ -274,6 +284,8 @@ def main(
         dtype = torch.bfloat16
     elif (dtype == "float32"): 
         dtype = torch.float32
+    else:
+        raise ValueError(f"Unknown dtype: {dtype}")
 
     t0 = time.time()
     model, tokenizer = load_model(model_name, device, backend,
@@ -353,7 +365,7 @@ if __name__ == '__main__':
         except:
             return x
 
-    parser.add_argument('--prompt', type=int_or_str, default=None, help="Input prompt. If it is not given, a single BOS token is fed as input prompt.")
+    parser.add_argument('--prompt', type=str, default=None, help="Input prompt. If it is not given, a single BOS token is fed as input prompt.")
     parser.add_argument('--num_samples', type=int, default=5, help='Number of samples.')
     parser.add_argument('--max_new_tokens', type=int, default=200, help='Maximum number of new tokens.')
     parser.add_argument('--top_k', type=int, default=200, help='Top-k for sampling.')

@@ -14,3 +14,4 @@ attributedict~=0.3.0
 flash1dkmeans>=0.2.3
 lm-eval==0.4.9
 nvtx~=0.2.12
+matplotlib~=3.10.3

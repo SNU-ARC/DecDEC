@@ -50,3 +50,20 @@ def get_pcie_info():
                     break
 
     return pcie_gen_max, pcie_lanes_max
+
+
+def get_gemv_kernel_name(algo, bit_width):
+    match algo:
+        case 'sqllm':
+            return f'matmul_kbit_32'
+        case 'awq':
+            return f'nqmv_bias'
+        case _:
+            raise ValueError(f"Unknown quantization algorithm: {algo}")
+
+
+def get_output_path(prefix, model_name, fp_dtype, base_gemv, bit_width):
+    return f"./nsys/{prefix}_{model_name}_{fp_dtype}_{base_gemv}_{bit_width}"
+
+DEC_KERNEL_NAME = 'fused_dec_kernel'
+
