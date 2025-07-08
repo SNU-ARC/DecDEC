@@ -1,7 +1,10 @@
 # DecDEC: A Systems Approach to Advancing Low‑Bit LLM Quantization
 
-> **DecDEC** (Decoding with **D**ynamic **E**rror **C**ompensation) is an *inference-time* add‑on that **restores the accuracy of aggressively quantized Large Language Models (LLMs)** while keeping their tiny memory footprint and fast latency.  
-> At run‑time the GPU fetches a *small, activation‑aware slice* of full‑precision weight **residuals** from CPU memory and applies them on‑the‑fly, recovering the lost accuracy of quantization with negligible memory and latency overhead.
+![decdec](https://github.com/user-attachments/assets/4113a94c-46e4-45a7-ba3f-1fbd36a5ceae)
+
+**DecDEC** (Decoding with **D**ynamic **E**rror **C**ompensation) is an *inference-time* add‑on that **restores the accuracy of aggressively quantized Large Language Models (LLMs)** while keeping their tiny memory footprint and fast latency.  
+
+At run‑time the GPU fetches a *small, activation‑aware slice* of full‑precision weight **residuals** from CPU memory and applies them on‑the‑fly, recovering the lost accuracy of quantization with negligible memory and latency overhead.
 
 
 ## How DecDEC Works
@@ -15,7 +18,7 @@
 ## Performance at a Glance
 
 | Model (AWQ 3‑bit) | GPU | PPL | Slow‑down |
-|---------------|-----|-------|-----------|---------------|
+|---------------|-----|-------|-----------|
 | Llama‑3‑8B‑Instruct | RTX‑4050M | **9.41** (vs 10.49) | **+1.7 %** |
 | Phi‑3‑4k‑Instruct  | RTX‑4070S | **5.23** (vs 5.92) | **+2.1 %** |
 
