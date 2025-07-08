@@ -68,6 +68,9 @@ This repository is organized as follows:
 
 For each component, refer to the respective `README.md` files for detailed instructions and examples.
 
+## A Note on Performance
+
+DecDEC’s inference throughput is sensitive to GPU load and PCIe usage. For best results, avoid running graphical interfaces or other GPU-intensive processes during end-to-end inference and autotuning.
 
 ## Citing DecDEC
 
