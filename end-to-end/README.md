@@ -64,3 +64,7 @@ Time for inference 1: 5.06 sec total, 197.81 tokens/sec
 ```
 
 and, at the end, the average tokens-per-second across all samples.
+
+## A Note on Performance
+
+DecDEC’s inference throughput is sensitive to GPU load and PCIe usage. For best results, avoid running graphical interfaces or other GPU-intensive processes during end-to-end inference and autotuning.
