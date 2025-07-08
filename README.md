@@ -1,16 +1,37 @@
-# DecDEC: A Systems Approach to Advancing Low-Bit LLM Quantization
+# DecDEC: A Systems Approach to Advancing Low‑Bit LLM Quantization
 
-## Overview
+> **DecDEC** (Decoding with **D**ynamic **E**rror **C**ompensation) is an *inference-time* add‑on that **restores the accuracy of aggressively quantized Large Language Models (LLMs)** while keeping their tiny memory footprint and fast latency.  
+> At run‑time the GPU fetches a *small, activation‑aware slice* of full‑precision weight **residuals** from CPU memory and applies them on‑the‑fly, recovering the lost accuracy of quantization with negligible memory and latency overhead.
 
-This repository contains the following 5 main components:
 
-| Directory | Description |
-|-----------|-------------|
-| [`decdec_setup/`](decdec_setup/) | Scripts to prepare quantized models and DecDEC artifacts. |
-| [`decdec_extension/`](decdec_extension/) | Custom CUDA extension implementing the DecDEC kernel. |
-| [`autotuner/`](autotuner/) | Autotuning scripts to find optimal DecDEC hyperparameters. |
-| [`end-to-end/`](end-to-end/) | End-to-end deployment scripts for real-time inference with DecDEC. |
-| [`evaluation/`](evaluation/) | Scripts to evaluate quantized LLMs with DecDEC. |
+## How DecDEC Works
+
+1. **Channel Selection** – a fast bucket‑based Top‑K picks `k_chunk` channels (per 1024) with highest |activation|.  
+2. **Residual Fetch** – 4‑bit residual rows for those channels are fetched from pinned CPU RAM via PCIe (CUDA zero‑copy).  
+3. **Residual GEMV** – residuals are multiplied with the sparsified activation vector in a fused GPU kernel that runs parallel to the base GEMV.  
+4. **Merge** – the residual output is atomically added to the GEMV result, yielding the compensated output.
+
+
+## Performance at a Glance
+
+| Model (AWQ 3‑bit) | GPU | PPL | Slow‑down |
+|---------------|-----|-------|-----------|---------------|
+| Llama‑3‑8B‑Instruct | RTX‑4050M | **9.41** (vs 10.49) | **+1.7 %** |
+| Phi‑3‑4k‑Instruct  | RTX‑4070S | **5.23** (vs 5.92) | **+2.1 %** |
+
+See full results in our paper.
+
+## Repository Structure
+
+This repository is organized as follows:
+
+| Directory | What’s inside |
+|-----------|---------------|
+| **`decdec_setup/`**     | Utilities to quantize an LLM (3‑/3.5‑/4‑bit) and generate DecDEC artifacts (`cheatsheet.pt`, `thresholds.pt`). |
+| **`decdec_extension/`** | A custom CUDA extension containing the fused *dynamic error‑compensation* kernel plus fast GEMV baselines. |
+| **`autotuner/`**        | A two‑phase tuner that picks `n_tb` (thread‑blocks) and `k_chunk` (channels/1024‑chunk) to hit a target slow‑down bound. |
+| **`end-to-end/`**       | Scripts to launch real‑time inference (prefill + decode) with DecDEC on single‑GPU desktops / laptops. |
+| **`evaluation/`**       | Reproducible evaluation harness (WikiText‑2 perplexity, BBH accuracy, MT‑Bench) and plotting utilities. |
 
 ## Getting Started
 
@@ -44,5 +65,13 @@ This repository contains the following 5 main components:
 
 For each component, refer to the respective `README.md` files for detailed instructions and examples.
 
-## Citation
-(To be added)
+
+## Citing DecDEC
+
+If you use DecDEC in your research, please cite:
+
+(TODO: Add citation information here)
+
+## License
+
+(TODO: Add license information here)

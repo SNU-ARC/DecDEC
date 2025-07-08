@@ -2,10 +2,10 @@
 
 This repository contains two thin CLI wrappers that make it easy to
 
-1. **Collect Nsight‑Systems traces** for a single quantised model (`run_profile.py`)
+1. **Collect Nsight‑Systems traces** for a single quantized model (`run_profile.py`)
 2. **Analyse & autotune** DecDEC kernel parameters for that trace (`tuner.py`)
 
-At the end of the process, you will have a set of $n_{tb}$ and $k_{chunk}$ parameters for each projection matrix, which you can use to run DecDEC with optimal performance.
+At the end of the process, you will have an optimal $n_{tb}$ value and $k_{chunk}$ parameters for each projection matrix, which you can use to run DecDEC with optimal performance.
 
 ## Prerequisites
 
@@ -14,24 +14,14 @@ At the end of the process, you will have a set of $n_{tb}$ and $k_{chunk}$ param
 
 ## 1.  Collect Nsight traces
 
+Below is an example of how to collect a trace for the `Meta-Llama-3-8B-Instruct` model using the `sqllm` algorithm with 3-bit quantization. The trace will be saved in the `./nsys/` directory.
+
 ```bash
-# 1) Meta‑Llama‑3‑8B‑Instruct — 3‑bit SQLLM
 python run_profile.py YOUR_PREFIX \
   --model_name Meta-Llama-3-8B-Instruct --algo sqllm --bitwidth 3 \
   --checkpoint_path "../end-to-end/anyprec-(Meta-Llama-3-8B-Instruct)-w3_orig3-gc1-c4_s100_blk512" \
   --fp_dtype fp16 --tokens 10
 
-# 2) Phi‑3‑medium‑4k‑instruct — 3‑bit SQLLM
-python run_profile.py YOUR_PREFIX \
-  --model_name Phi-3-medium-4k-instruct --algo sqllm --bitwidth 3 \
-  --checkpoint_path "../end-to-end/anyprec-(Phi-3-medium-4k-instruct)-w3_orig3-gc1-c4_s100_blk512" \
-  --fp_dtype fp16 --tokens 10
-
-# 3) Meta‑Llama‑3‑70B‑Instruct — 3‑bit SQLLM
-python run_profile.py YOUR_PREFIX \
-  --model_name Meta-Llama-3-70B-Instruct --algo sqllm --bitwidth 3 \
-  --checkpoint_path "../end-to-end/anyprec-(Meta-Llama-3-70B-Instruct)-w3_orig3-gc1-c4_s100_blk512" \
-  --fp_dtype fp16 --tokens 10
 ```
 
 Arguments of note:
@@ -118,9 +108,9 @@ k_chunk per module       : 4, 4, 5, 5
 * `n_tb` is the chosen **maximum thread‑blocks** allocated for DEC.
 * The four $k_{chunk}$ values correspond to the four projection matrices: QKV, O, GU, and D.
 
-## 4. What's next?
+## 4. Next Steps
 
-Now that you have the optimal parameters, you can run DecDEC with these settings.
+With the optimal parameters in hand you can:
 
-- Go to [`end-to-end`](../end-to-end/) to test inference throughput with DecDEC.
-- Go to [`evaluation`](../evaluation/) to evaluate the performance of your quantised model with DecDEC.
+- Benchmark inference throughput in [`end-to-end/`](../end-to-end/)
+- Evaluate accuracy in [`evaluation/`](../evaluation/)
