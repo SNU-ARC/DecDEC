@@ -33,7 +33,7 @@ python generate.py --prompt "What is the capital of France?" --compile 2 --num_s
 | `--top_k` | int | `200` | Top-*k* nucleus filter applied before sampling (set to a large value to disable). |
 | `--temperature` | float | `0.0` | Softmax temperature. `0` ≈ greedy decoding; > 0 enables stochastic sampling. |
 | `--compile` | int | `2` | Torch-Inductor compilation mode: <br>• `0` — disable <br>• `1` — `max-autotune-no-cudagraphs` (safer) <br>• `2` — `max-autotune` + CUDA graphs after the first iteration. |
-| `--device` | str | *auto* (`cuda` if available) | Target device ID (`cuda`, `cuda:1`, `cpu`, `mps`, …). |
+| `--device` | str | *auto* (`cuda` if available) | Target device ID (`cuda`, `cuda:1` …). |
 | `--model_name` | str | **required** | Supported choices: `Meta-Llama-3-8B-Instruct`, `Phi-3-medium-4k-instruct`. |
 | `--bitwidth` | `int` or `float` | **required** | Quantization bit-width per weight. Can be fractional (`3.5`) for mixed precision. |
 | `--checkpoint_path` | str | **required** | Directory containing the quantized model weights, tokenizer, `cheatsheet.pt`, `thresholds.pt`, and (optionally) `bitwidth_map.json` for mixed precision. |
