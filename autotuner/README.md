@@ -1,6 +1,6 @@
-# DecDEC Profiling & Tuning Toolkit
+# DecDEC Autotuner
 
-This repository contains two thin CLI wrappers that make it easy to
+This repository contains the DecDEC autotuner, consisting of two runable scripts:
 
 1. **Collect Nsight‑Systems traces** for a single quantized model (`run_profile.py`)
 2. **Analyse & autotune** DecDEC kernel parameters for that trace (`tuner.py`)
@@ -114,3 +114,7 @@ With the optimal parameters in hand you can:
 
 - Benchmark inference throughput in [`end-to-end/`](../end-to-end/)
 - Evaluate accuracy in [`evaluation/`](../evaluation/)
+
+## A Note on Performance
+
+DecDEC’s inference throughput is sensitive to GPU load and PCIe usage. For best results, avoid running graphical interfaces or other GPU-intensive processes during end-to-end inference and autotuning.
