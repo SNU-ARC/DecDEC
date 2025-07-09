@@ -20,7 +20,7 @@ At run‑time the GPU fetches a *small, activation‑aware slice* of full‑prec
 | Model (AWQ 3‑bit) | GPU | PPL | Slow‑down |
 |---------------|-----|-------|-----------|
 | Llama‑3‑8B‑Instruct | RTX‑4050M | **9.41** (vs 10.49) | **+1.7 %** |
-| Phi‑3‑4k‑Instruct  | RTX‑4070S | **5.23** (vs 5.92) | **+2.1 %** |
+| Phi‑3‑medium-4k‑instruct  | RTX‑4070S | **5.23** (vs 5.92) | **+2.1 %** |
 
 See full results in our paper.
 
