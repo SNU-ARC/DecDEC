@@ -76,7 +76,13 @@ DecDEC’s inference throughput is sensitive to GPU load and PCIe usage. For bes
 
 If you use DecDEC in your research, please cite:
 
-(TODO: Add citation information here)
+```bibtex
+@inproceedings{park-osdi25,
+  title = {DecDEC: A Systems Approach to Advancing Low-Bit LLM Quantization},
+  author = {Park, Yeonhong and Hyun, Jake and Kim, Hojoon and Jae W., Lee},
+  booktitle = {19th USENIX Symposium on Operating Systems Design and Implementation (OSDI 25)},
+  year = {2025}
+}
 
 ## License
 
