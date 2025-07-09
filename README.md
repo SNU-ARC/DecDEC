@@ -1,4 +1,4 @@
-# DecDEC: A Systems Approach to Advancing Low‑Bit LLM Quantization [[Paper](https://arxiv.org/pdf/2412.20185)]
+# DecDEC: A Systems Approach to Advancing Low‑Bit LLM Quantization [[Paper](https://www.usenix.org/system/files/osdi25-park-yeonhong.pdf)]
 
 ![decdec](https://github.com/user-attachments/assets/4113a94c-46e4-45a7-ba3f-1fbd36a5ceae)
 
