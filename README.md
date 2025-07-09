@@ -79,7 +79,7 @@ If you use DecDEC in your research, please cite:
 ```bibtex
 @inproceedings{park-osdi25,
   title = {DecDEC: A Systems Approach to Advancing Low-Bit LLM Quantization},
-  author = {Park, Yeonhong and Hyun, Jake and Kim, Hojoon and Jae W., Lee},
+  author = {Park, Yeonhong and Hyun, Jake and Kim, Hojoon and Lee, Jae W.},
   booktitle = {19th USENIX Symposium on Operating Systems Design and Implementation (OSDI 25)},
   year = {2025}
 }
