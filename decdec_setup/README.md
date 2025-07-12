@@ -39,9 +39,22 @@ Follow one of the guides below to obtain them.
 
 > Note that this example uses the `meta-llama/Meta-Llama-3-8B-Instruct` model, but you can replace it with any other model that you wish to quantize. Please adjust the paths accordingly if you use a different model.
 
-### 2.1 AWQ Example (TODO)
+### 2.1 AWQ Example
 
-*(Detailed steps forthcoming.)*
+```bash
+cd llm-awq
+
+./llama3_example.sh
+
+./qwen2.5_example.sh
+
+./phi_example.sh
+
+# Running the scripts will produce the following files:
+#   ↳ scaled_cache/$MODEL_NAME   – scaled full-precision model
+#   ↳ fakequant_cache/$MODEL_NAME   – fake-quantized model
+#   ↳ quant_cache/$MODEL_NAME   – quantized model
+```
 
 ### 2.2 SqueezeLLM Example
 
