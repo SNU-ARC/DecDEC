@@ -123,11 +123,12 @@ def decode_n_tokens(model: Transformer, cur_token: torch.Tensor, input_pos: torc
     new_tokens, new_probs = [], []
     with nvtx.annotate("Decoding tokens", color='orange'):
         for i in range(num_new_tokens):
-            with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True):
+            with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_mem_efficient=False, enable_math=True): # torch.backends.cuda.sdp_kernel() is deprecated -> with torch.nn.attention.sdpa_kernel(torch.nn.attention.SDPBackend.MATH):
                 if use_graph:
                     # Update inputs in-place
                     static_cur_token.copy_(cur_token)
                     static_input_pos.copy_(input_pos)
+                    torch.cuda.synchronize()
                     graph.replay()
                     # Retrieve outputs from static output tensors
                     next_token = static_next_token.clone()
