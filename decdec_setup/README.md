@@ -19,7 +19,7 @@ These scripts produce two binary blobs that DecDEC needs at inference:
 | **fake-quantized model** | A model whose quantized weights have been **cast back to FP16**. It is only used while *building* DecDEC artifacts. |
 | **real-quantized model** | The final integer / low-bit model used at inference. DecDEC consumes this plus the two auxiliary `.pt` files generated below. |
 
-> **AWQ note**: Always treat the *scaled* full-precision model produced by AWQ as your “original model”. The un-scaled weights will not match the quantized ones.
+> **AWQ note**: Always treat the *scaled* full-precision model produced by AWQ as your “original model”. The weights before scaling will not have one-to-one correspondence with the quantized ones.
 
 ## 1. Supported Quantization Methods
 
@@ -45,16 +45,45 @@ Follow one of the guides below to obtain them.
 cd llm-awq
 
 ./llama3_example.sh
-
 ./qwen2.5_example.sh
-
 ./phi_example.sh
-
-# Running the scripts will produce the following files:
-#   ↳ scaled_cache/$MODEL_NAME   – scaled full-precision model
-#   ↳ fakequant_cache/$MODEL_NAME   – fake-quantized model
-#   ↳ quant_cache/$MODEL_NAME   – quantized model
 ```
+
+Each script produces three `.pt` files representing different stages:
+
+* **Original (AWQ-scaled) full-precision:** `./llm-awq/scaled_cache/$MODEL_NAME-w$BITS-g128.pt`
+* **Fake-quantized:** `./llm-awq/fakequant_cache/$MODEL_NAME-w$BITS-g128.pt`
+* **Real-quantized (LUT-GEMM):** `./llm-awq/quant_cache/$MODEL_NAME-w$BITS-g128-lutgemm.pt`
+
+Before proceeding with the next steps, make each variant loadable as follows:
+
+```bash
+# Original (AWQ-scaled full-precision)
+mkdir -p ./llm-awq/export/$MODEL_NAME-awq-fp
+cp ./llm-awq/scaled_cache/$MODEL_NAME-w$BITS-g128.pt ./llm-awq/export/$MODEL_NAME-awq-fp/pytorch_model.bin
+
+# Fake-quantized
+mkdir -p ./llm-awq/export/$MODEL_NAME-awq-fakequant
+cp ./llm-awq/fakequant_cache/$MODEL_NAME-w$BITS-g128.pt ./llm-awq/export/$MODEL_NAME-awq-fakequant/pytorch_model.bin
+
+# Real-quantized (LUT-GEMM)
+mkdir -p ./llm-awq/export/$MODEL_NAME-awq-lutgemm
+cp ./llm-awq/quant_cache/$MODEL_NAME-w$BITS-g128-lutgemm.pt ./llm-awq/export/$MODEL_NAME-awq-lutgemm/pytorch_model.bin
+
+# Copy shared files from the original model
+cp /path/to/original_model/config.json ./llm-awq/export/$MODEL_NAME-awq-*/
+cp /path/to/original_model/tokenizer* ./llm-awq/export/$MODEL_NAME-awq-*/
+```
+
+Resulting paths:
+
+| Model Variant                        | Export Directory Path                        |
+| ------------------------------------ | -------------------------------------------- |
+| Original (AWQ-scaled) full-precision | `./llm-awq/export/$MODEL_NAME-awq-fp`        |
+| Fake-quantized                       | `./llm-awq/export/$MODEL_NAME-awq-fakequant` |
+| Real-quantized (LUT-GEMM)            | `./llm-awq/export/$MODEL_NAME-awq-lutgemm`   |
+
+
 
 ### 2.2 SqueezeLLM Example
 
