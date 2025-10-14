@@ -84,7 +84,3 @@ If you use DecDEC in your research, please cite:
   year = {2025}
 }
 ```
-
-## License
-
-(TODO: Add license information here)
