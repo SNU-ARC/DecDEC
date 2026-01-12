@@ -109,7 +109,7 @@ cd ..
 # Convert to fake-quantized FP16
 python conv_sqllm.py \
     --original_model_path meta-llama/Meta-Llama-3-8B-Instruct \
-    --quantized_path "./any-precision-llm/cache/quantized/(Meta-Llama-3-8B-Instruct)-w3-orig3-gc1-c4_s100_blk512" \
+    --quantized_path "./any-precision-llm/cache/quantized/(Meta-Llama-3-8B-Instruct)-w3_orig3-gc1-c4_s100_blk512" \
     --output_path "./fakesqllm-(Meta-Llama-3-8B-Instruct)-w3_orig3-gc1-c4_s100_blk512"
 ```
 
