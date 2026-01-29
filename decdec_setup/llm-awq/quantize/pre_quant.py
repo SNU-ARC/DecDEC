@@ -140,7 +140,13 @@ def run_awq(
         "scale": [],
         "clip": [],
     }
-    bit_dict = torch.load(bit_pt)
+    # bit_pt can be either a path to a .pt file or an integer
+    if isinstance(bit_pt, int):
+        # Create a uniform bit dictionary for all layers
+        bit_dict = {i: bit_pt for i in range(len(layers))}
+    else:
+        # Load bit dictionary from file
+        bit_dict = torch.load(bit_pt)
     # solve layer by layer
     for i in tqdm.tqdm(range(len(layers)), desc="Running AWQ..."):
         w_bit = bit_dict[i]
