@@ -87,6 +87,25 @@ def run_awq(
     # some configs for ablation study
     calib_data="pileval",
 ):
+    """
+    Run AWQ (Activation-aware Weight Quantization) search.
+    
+    Args:
+        model: The model to quantize
+        enc: Tokenizer
+        bit_pt: Either an integer specifying uniform bit-width for all layers,
+                or a path to a .pt file containing a dictionary mapping layer 
+                indices to their respective bit-widths
+        q_config: Quantization configuration
+        n_samples: Number of calibration samples
+        seqlen: Sequence length
+        auto_scale: Whether to apply auto-scaling
+        mse_range: Whether to use MSE-based range estimation
+        calib_data: Calibration dataset name
+    
+    Returns:
+        Dictionary containing AWQ results (scale and clip values)
+    """
     from ..utils.calib_data import get_calib_dataset
     from ..utils.module import append_str_prefix, get_op_name
 
@@ -140,7 +159,13 @@ def run_awq(
         "scale": [],
         "clip": [],
     }
-    bit_dict = torch.load(bit_pt)
+    # bit_pt can be either a path to a .pt file or an integer
+    if isinstance(bit_pt, int):
+        # Create a uniform bit dictionary for all layers
+        bit_dict = {i: bit_pt for i in range(len(layers))}
+    else:
+        # Load bit dictionary from file
+        bit_dict = torch.load(bit_pt)
     # solve layer by layer
     for i in tqdm.tqdm(range(len(layers)), desc="Running AWQ..."):
         w_bit = bit_dict[i]
