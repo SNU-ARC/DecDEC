@@ -5,6 +5,46 @@ from typing import Dict, Tuple
 
 import torch
 
+RESIDUAL_VALUES_PER_WORD = 8
+
+
+def fuse_reordered_scales(*projection_scales: torch.Tensor) -> torch.Tensor:
+    """Fuse per-projection DecDEC scales into one global nibble-major layout.
+
+    ``cheatsheet.py`` reorders each projection's natural output-row scales as
+    [nibble, packed_output]. After packed residual matrices are concatenated
+    along packed_output, the CUDA kernel indexes one fused tensor in that same
+    global order. Undo each local reorder before concatenating output rows,
+    then apply the reorder once to the fused vector.
+    """
+
+    if not projection_scales:
+        raise ValueError("at least one residual scale tensor is required")
+
+    natural_scales = []
+    for scales in projection_scales:
+        if scales.ndim != 1 or scales.numel() % RESIDUAL_VALUES_PER_WORD != 0:
+            raise ValueError(
+                "each residual scale tensor must be one-dimensional with a size divisible by 8"
+            )
+        packed_outputs = scales.numel() // RESIDUAL_VALUES_PER_WORD
+        natural_scales.append(
+            scales.reshape(RESIDUAL_VALUES_PER_WORD, packed_outputs)
+            .transpose(0, 1)
+            .contiguous()
+            .reshape(-1)
+        )
+
+    fused_natural = torch.cat(natural_scales, dim=0)
+    fused_packed_outputs = fused_natural.numel() // RESIDUAL_VALUES_PER_WORD
+    return (
+        fused_natural.reshape(fused_packed_outputs, RESIDUAL_VALUES_PER_WORD)
+        .transpose(0, 1)
+        .contiguous()
+        .reshape(-1)
+    )
+
+
 def lutgemm_load(
     ckpt_dir: str,
     *,
@@ -128,13 +168,10 @@ def lutgemm_load(
                 ),
                 dim=1,
             )
-            qkv_scales = torch.cat(
-                (
-                    layer["self_attn.q_proj"]["reordered_scales"],
-                    layer["self_attn.k_proj"]["reordered_scales"],
-                    layer["self_attn.v_proj"]["reordered_scales"],
-                ),
-                dim=0,
+            qkv_scales = fuse_reordered_scales(
+                layer["self_attn.q_proj"]["reordered_scales"],
+                layer["self_attn.k_proj"]["reordered_scales"],
+                layer["self_attn.v_proj"]["reordered_scales"],
             )
         else:
             qkv_q_residual = layer["self_attn.qkv_proj"]["cheatsheet"]
@@ -158,12 +195,9 @@ def lutgemm_load(
                 ),
                 dim=1,
             )
-            w1w3_scales = torch.cat(
-                (
-                    layer["mlp.gate_proj"]["reordered_scales"],
-                    layer["mlp.up_proj"]["reordered_scales"],
-                ),
-                dim=0,
+            w1w3_scales = fuse_reordered_scales(
+                layer["mlp.gate_proj"]["reordered_scales"],
+                layer["mlp.up_proj"]["reordered_scales"],
             )
         else:
             w1w3_q_residual = layer["mlp.gate_up_proj"]["cheatsheet"]
@@ -315,13 +349,10 @@ def ap_load(
                 ),
                 dim=1,
             )
-            qkv_scales = torch.cat(
-                (
-                    layer["self_attn.q_proj"]["reordered_scales"],
-                    layer["self_attn.k_proj"]["reordered_scales"],
-                    layer["self_attn.v_proj"]["reordered_scales"],
-                ),
-                dim=0,
+            qkv_scales = fuse_reordered_scales(
+                layer["self_attn.q_proj"]["reordered_scales"],
+                layer["self_attn.k_proj"]["reordered_scales"],
+                layer["self_attn.v_proj"]["reordered_scales"],
             )
         else:
             qkv_qres = layer["self_attn.qkv_proj"]["cheatsheet"]
@@ -345,12 +376,9 @@ def ap_load(
                 ),
                 dim=1,
             )
-            w1w3_scales = torch.cat(
-                (
-                    layer["mlp.gate_proj"]["reordered_scales"],
-                    layer["mlp.up_proj"]["reordered_scales"],
-                ),
-                dim=0,
+            w1w3_scales = fuse_reordered_scales(
+                layer["mlp.gate_proj"]["reordered_scales"],
+                layer["mlp.up_proj"]["reordered_scales"],
             )
         else:
             w1w3_qres = layer["mlp.gate_up_proj"]["cheatsheet"]
