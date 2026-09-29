@@ -120,8 +120,9 @@ __global__ void fused_dec_kernel(
         if (threshold_idx < threshold_b_pos) {
             // index 0 to threshold_b_pos - 1
             // [threshold_a, threshold_b]
-            threshold_floor = threshold_a +
-                              TO_DTYPE(DT, TO_FLOAT(DT, threshold_b - threshold_a) * threshold_idx / (threshold_b_pos - 1));
+            // Compute in FP32 and round once: FP16 double rounding can make the floors non-monotone.
+            threshold_floor = TO_DTYPE(DT, TO_FLOAT(DT, threshold_a) +
+                              (TO_FLOAT(DT, threshold_b) - TO_FLOAT(DT, threshold_a)) * threshold_idx / (threshold_b_pos - 1));
         } else {
             // index threshold_b_pos to NUM_THRESHOLDS - 1
             // (threshold_b, 0]
