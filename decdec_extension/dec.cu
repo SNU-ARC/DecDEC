@@ -220,9 +220,11 @@ __global__ void fused_dec_kernel(
         const uint32_t thread_col_idx_start = matrix_col_idx * NIBBLES_PER_ELEMENT;
 
         // Load scales into shared memory
-        for (uint32_t nibble_idx = threadIdx.y; nibble_idx < NIBBLES_PER_ELEMENT; nibble_idx += blockDim.y) {
-            shared_reordered_scales[nibble_idx * blockDim.x + matrix_col_offset] = reordered_scales[
-                    nibble_idx * num_matrix_cols + matrix_col_idx];
+        if (matrix_col_idx < num_matrix_cols) {
+            for (uint32_t nibble_idx = threadIdx.y; nibble_idx < NIBBLES_PER_ELEMENT; nibble_idx += blockDim.y) {
+                shared_reordered_scales[nibble_idx * blockDim.x + matrix_col_offset] = reordered_scales[
+                        nibble_idx * num_matrix_cols + matrix_col_idx];
+            }
         }
 
         __syncthreads();
@@ -366,9 +368,11 @@ __global__ void dec_kernel(
         const uint32_t thread_col_idx_start = matrix_col_idx * NIBBLES_PER_ELEMENT;
 
         // Load scales into shared memory
-        for (uint32_t nibble_idx = threadIdx.y; nibble_idx < NIBBLES_PER_ELEMENT; nibble_idx += blockDim.y) {
-            shared_reordered_scales[nibble_idx * blockDim.x + matrix_col_offset] = reordered_scales[
-                    nibble_idx * num_matrix_cols + matrix_col_idx];
+        if (matrix_col_idx < num_matrix_cols) {
+            for (uint32_t nibble_idx = threadIdx.y; nibble_idx < NIBBLES_PER_ELEMENT; nibble_idx += blockDim.y) {
+                shared_reordered_scales[nibble_idx * blockDim.x + matrix_col_offset] = reordered_scales[
+                        nibble_idx * num_matrix_cols + matrix_col_idx];
+            }
         }
 
         __syncthreads();
